@@ -16,7 +16,6 @@ args = commandArgs(trailingOnly=TRUE)
 #rm(list=ls())
 setwd('/home/ubuntu/main/inventory/')
 # S3 files for report inventory to be listed here
-s3Location = "s3://aiqdatabucket/outputfiles/report_inventory_appnexus/day_numeric="
 #evalDates = args
 system(paste0("sudo rm  ",getwd(),"/data/*"))
 #system(paste0("sudo rm -rf ",getwd(),"/adv_data/c*"))
@@ -89,7 +88,6 @@ for(date in args){
 }
 
 #Read the pixel data
-s3Location = "s3://aiqdatabucket/aiq-inputfiles/lookup_data/aiq-app-lookups/lu_conversion_pixel/"
 getFileList = sapply(strsplit(system(paste0("sudo s3cmd ls ",s3Location),intern = T),split = " "), function(x) tail(x,1))
 this.filename = "pixel_lookup"
 getFile = getFileList[[1]][length(getFileList[[1]])] 
@@ -492,9 +490,3 @@ write.table(network_inventory_bids,file = adv_filename,append = F,quote = F,sep 
 
 ```
 
-You can also embed plots, for example:
-
-```{r, echo=FALSE}
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
