@@ -1,0 +1,500 @@
+---
+title: "Opti_Dash"
+author: "Purshottam"
+date: "October 6, 2016"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+
+args = commandArgs(trailingOnly=TRUE)
+#rm(list=ls())
+setwd('/home/ubuntu/main/inventory/')
+# S3 files for report inventory to be listed here
+s3Location = "s3://aiqdatabucket/outputfiles/report_inventory_appnexus/day_numeric="
+#evalDates = args
+system(paste0("sudo rm  ",getwd(),"/data/*"))
+#system(paste0("sudo rm -rf ",getwd(),"/adv_data/c*"))
+
+#evalDates = 20160831
+#require(ggplot2)
+#require(ggmap)
+#bbox <- c(left = -170, bottom = -60, right = 170, top = 80)
+#stamenMap = get_stamenmap(bbox, zoom = 3, maptype="watercolor")
+require(data.table)
+#Inventory_data<-list(0)
+#system(paste0("sudo rm -rf ",getwd(),"/adv_data/*"))
+#system(paste0("sudo chown -R rstudio:rstudio ",getwd(),"/adv_data/"))
+system(paste0("sudo chown -R ubuntu:ubuntu ",getwd(),"/adv_data/"))
+for(date in args){
+  #gc()
+  #date=20160802
+  data.folder = paste0(s3Location,date,"/")
+  getFileList = sapply(strsplit(system(paste0("sudo s3cmd ls ",data.folder),intern = T),split = " "), function(x) tail(x,1))
+  # i=0
+  
+  for (getFile in getFileList){
+   # i=i+1
+   # i<-as.integer(i)
+     this.filename = sample(1000000:9000000,1)  
+   # getFile = getFileList[[i]][length(getFileList[[i]])]  
+   system(paste0("sudo s3cmd get --force ",getFile," ./data/",this.filename,".gz"))
+   system(paste0("sudo gunzip ./data/",this.filename,".gz"))
+   
+   
+   # filelist<-list.files(path="./data/")
+   # Inventory_data<-rbindlist(lapply(paste0("./data/",filelist), fread))
+   # this.table = read.table(paste0("./data/",this.filename),header = F,sep = "\t",fill = T)
+   
+   #connection to read data Method 1
+    con = file(paste0("./data/",this.filename))
+   open(con)
+   data = readLines(con,-1L)
+   close(con)
+
+   splits = strsplit(data,split = "\t")
+   dataDF = do.call(rbind,splits)
+   #trimws(unique(dataDF[,16])[1])
+   #using fread to import data Method 2
+   # filelist<-list.files(path="./data/")
+   # dataDF<-list()
+   # dataDF<-rbindlist(lapply(paste0("./data/",filelist), fread))
+   # dataDF<-as.matrix(dataDF)
+
+ 
+   adv_df = split.data.frame(dataDF,as.factor(dataDF[,16]))
+
+   writes = sapply(adv_df, function(adv_data,date){
+   
+     adv_id = unique(adv_data[,16])[1]
+     if(adv_id == "\\N" | adv_id=="0"|adv_id=="") return(0)
+     adv_folder = paste0(getwd(),"/adv_data/",adv_id,"/input_data/")
+     system(paste0("mkdir -p ",adv_folder))
+     #system(paste0("sudo chown -R rstudio:rstudio ",adv_folder))
+     print(trimws(unique(adv_data[,16])[1]))
+    
+     adv_filename = paste0( getwd(),"/adv_data/",trimws(unique(adv_data[,16])[1]),"/input_data/",date,".tsv")
+     
+      write.table(adv_data,file = adv_filename,append = T,quote = F,sep = "\t",row.names = F,col.names = F)
+     return(0)
+   },date)
+   closeAllConnections()
+   system(paste0("sudo rm ","./data/",this.filename))
+  }
+}
+
+#Read the pixel data
+s3Location = "s3://aiqdatabucket/aiq-inputfiles/lookup_data/aiq-app-lookups/lu_conversion_pixel/"
+getFileList = sapply(strsplit(system(paste0("sudo s3cmd ls ",s3Location),intern = T),split = " "), function(x) tail(x,1))
+this.filename = "pixel_lookup"
+getFile = getFileList[[1]][length(getFileList[[1]])] 
+system(paste0("sudo s3cmd get --force ",getFile," /home/ubuntu/main/pixel/",this.filename,".txt"))
+
+
+#get range of dates
+
+rm(adv_df)
+
+#Analysis
+
+  system(paste0("find ./adv_data/ -maxdepth 1 -type d"))
+  dir_list<-as.data.frame(list.dirs(path="/home/ubuntu/main/inventory/adv_data",recursive =F))
+  colnames(dir_list)<-c("dir_name")
+  
+  
+  network_data<-data.frame(ADVERTISER_ID=integer(),
+                           ADVERTISER_NAME=factor(),
+                           INSERTION_ORDER_ID=integer(),
+                           INSERTION_ORDER_NAME=factor(),
+                           SELLER_MEMBER_ID=integer(),
+                           SELLER_NAME=factor(),
+                           SITE_DOMAIN=factor(),
+                           TAG_ID=factor(),
+                           CREATIVE_SIZE=character(),
+                           IMPS=integer(),
+                           CLICKS=integer(),
+                           PC=integer(),
+                           PV=integer(),
+                           SPEND=numeric(),
+                           EAP=numeric(),
+                           ECP=numeric(),
+                           BUYER_BID=numeric(),
+                           VIEWS=integer(),
+                           OUTOFVIEWS=integer(),
+                           CPC=numeric(),
+                           CTR=numeric(),
+                           CPM=numeric(),
+                           IVR=numeric(),
+                           RESULT_TYPE=character())
+  
+  #network_data<-rbind(as.data.frame(data_frame_inventory),network_data)
+  
+  
+  #dir_list_select<-as.data.frame(dir_list[grep(312023,dir_list$dir_name),])
+  #Check=0
+  #system.time({
+    i=nrow(dir_list)
+   # dir_list[386]
+    Check=0
+    for (x in 300:i){
+      
+      Check=Check+1
+      print(Check)
+  #    x=30
+      
+      filelist<-list.files(paste0(dir_list[x,1],"/input_data/"))
+      #filelist<-list.files(paste0(dir_list_select[1,1],"/input_data/"))
+      
+      for (file in filelist){
+        print(file)
+        path=paste0(dir_list[x,1],"/input_data/",file)
+        #path=paste0(dir_list_select[1,1],"/input_data/",file)
+        print(path)
+        text = lapply(path, function(x)
+        {
+          #myFile <- gzfile(x, open = "r")
+          this.text = read.delim(path,header = F,sep = '\t',quote = '"',fill = T)
+          return(this.text)
+          print("reading")
+        })}
+      
+      total.text1 = do.call(rbind,text) #appending
+      rm(text) #remove existing text file
+      
+      colnames(total.text1)<-c("SITE_DOMAIN",
+                               "TAG_ID",
+                               "DEAL_ID",
+                               "CREATIVE_ID",
+                               "CREATIVE_NAME",
+                               "WIDTH",
+                               "HEIGHT",
+                               "INSERTION_ORDER_ID",
+                               "INSERTION_ORDER_NAME",
+                               "CAMPAIGN_ID",
+                               "CAMPAIGN_NAME",
+                               "SELLER_MEMBER_ID",
+                               "SELLER_NAME",
+                               "PUBLISHER_ID",
+                               "GEO_COUNTRY",
+                               "ADVERTISER_ID",
+                               "ADVERTISER_NAME",
+                               "LINEITEM_ID",
+                               "LINEITEM_NAME",
+                               "PIXEL_ID",
+                               "PIXEL_NAME",
+                               "SUPPLY_TYPE",
+                               "DAYSERIAL_NUMERIC",
+                               "IMPRESSIONS",
+                               "ABOVE_FOLD_IMPS",
+                               "BELOW_FOLD_IMPS",
+                               "FOLD_UNKNOWN_IMPS",
+                               "CLICKS",
+                               "PVCONVERSIONS",
+                               "PCCONVERSIONS",
+                               "BUYER_SPEND",
+                               "BUYER_BID",
+                               "EAP",
+                               "ECP",
+                               "POST_CLICK_REVENUE",
+                               "POST_VIEW_REVENUE",
+                               "APPNEXUS_VIEWS",
+                               "APPNEXUS_OUTOFVIEWS",
+                               "DT",
+                               "MONTHNAME",
+                               "WEEK_OF_MONTH",
+                               "CATEGORY",
+                               "SUBCATEGORY")
+      
+      Pixel_lookup<-rbindlist(lapply('/home/ubuntu/main/pixel/pixel_lookup.txt', fread))
+      colnames(Pixel_lookup)<-c("pixel_id","pixel_name","advertiser_id","status","last_modified")
+      
+      #Pixel_lookup_confirmation<-Pixel_lookup[grep("confirm",tolower(pixel_name)),]
+      total.text1[is.na(total.text1)]=0
+      #Pixel_lookup_confirmation<-subset(Pixel_lookup,Pixel_lookup$pixel_name %like% "%Confirmation%")
+      
+     
+      #unique(Inventory_data_subset$PIXEL_ID)
+      
+      #IO Level Top Performing Domains by Seller, Tag ID, Creative Size
+      #require(data.table)
+      Inventory_data<-as.data.frame(total.text1)
+      rm(total.text1)
+      Inventory_data<-subset(Inventory_data, (Inventory_data$PIXEL_ID %in% Pixel_lookup$pixel_id)
+                                    | (Inventory_data$PIXEL_ID==0))
+      Inventory_data$CREATIVE_SIZE<-paste(Inventory_data$WIDTH,Inventory_data$HEIGHT,sep = "*")
+      
+      dim=list("SITE_DOMAIN","SELLER_NAME","TAG_ID","CREATIVE_SIZE")
+      pixel_count=as.integer(unique(Inventory_data$PIXEL_ID))
+      library(dplyr)
+      j=length(dim)
+      
+        
+        
+        
+      
+      #Naming convention data franmes in lower case and variable is upper case
+      #conversion campaigns
+  
+      for(y in 1:j )
+      {
+   #   y=2
+        print(y)
+        print("starting for CVR performance")
+        this.frame<-as.character(dim[y])
+        print(this.frame)
+        #data_frame_name<-
+  
+        data_frame_inventory<-Inventory_data %>%
+          group_by(ADVERTISER_ID,ADVERTISER_NAME,INSERTION_ORDER_ID,INSERTION_ORDER_NAME,
+                   Inventory_data[,c(this.frame)]) %>%
+          summarise(IMPS=sum(IMPRESSIONS),CLICKS=sum(CLICKS),PC=sum(PCCONVERSIONS),PV=sum(PVCONVERSIONS),
+                    SPEND=sum(BUYER_SPEND),EAP=sum(EAP)/sum(IMPRESSIONS),ECP=sum(ECP)/sum(IMPRESSIONS),BUYER_BID=sum(BUYER_BID)*1000/sum(IMPRESSIONS),VIEWS=sum(APPNEXUS_VIEWS),OUTOFVIEWS=sum(APPNEXUS_OUTOFVIEWS))
+  
+        data_frame_inventory[is.na(data_frame_inventory)]=0
+        #data_frame_system$`system_data[, c(this.frame)]`
+        colnames(data_frame_inventory)[5]=this.frame
+        #names(data_frame_system)[names(data_frame_system) == 'system_data[, c(this.frame)]'] <- this.frame
+        #rename(data_frame_system,system_data[, c(this.frame)]=this.frame)
+        data_frame_inventory$CPA<-data_frame_inventory$SPEND/(data_frame_inventory$PC+data_frame_inventory$PV)
+        data_frame_inventory$CVR<-(data_frame_inventory$PC+data_frame_inventory$PV)/data_frame_inventory$IMPS
+        data_frame_inventory$CPM<-data_frame_inventory$SPEND*1000/data_frame_inventory$IMPS
+        data_frame_inventory$IVR<-data_frame_inventory$VIEWS/(data_frame_inventory$VIEWS+data_frame_inventory$OUTOFVIEWS)
+        #data_frame_inventory$Rec_bid<-data_frame_inventory$EAP*.75/0.45
+        data_frame_inventory[data_frame_inventory=='Inf']=0
+        data_frame_inventory$TOT_CONV<-(data_frame_inventory$PC+data_frame_inventory$PV)
+  
+  
+        data_frame_inventory$RESULT_TYPE="CPA"
+        data_frame_inventory<-subset(data_frame_inventory,(data_frame_inventory$IMPS>10)&(data_frame_inventory$TOT_CONV>2))
+        data_frame_inventory<-data_frame_inventory[order(-data_frame_inventory$PC,data_frame_inventory$CPA,-data_frame_inventory$CVR),]
+        adv_id = as.integer(unique(data_frame_inventory$ADVERTISER_ID))
+        cpa_frame<-paste("top_inventory_conv",this.frame, sep = '_')
+        assign(cpa_frame, data_frame_inventory)
+  
+        print("done for Converters")
+        #writing file to the machine
+  
+        #if(adv_id == "\\N" | adv_id=="0") return(0)
+        adv_folder = paste0(getwd(),"/adv_data/",adv_id,"/cpa_output")
+        system(paste0("mkdir -p ",adv_folder))
+        #system(paste0("sudo chown -R rstudio:rstudio ",adv_folder))
+        #print(trimws(unique(adv_data[,16])[1]))
+  
+        adv_filename = paste0( getwd(),"/adv_data/",adv_id,"/cpa_output/",cpa_frame,".tsv")
+        #print(j)
+  
+        #adv_filename = paste0("./adv_data/",trimws(unique(dataDF[,16])[j]),"/",date,".tsv")
+        write.table(data_frame_inventory,file = adv_filename,append = F,quote = F,sep = "\t",row.names = F,col.names = F)
+  
+  
+  
+  
+        print("starting for CTR performance")
+  
+        this.frame<-as.character(dim[y])
+        print(this.frame)
+        #data_frame_name<-
+        data_frame_inventory<-Inventory_data %>%
+          group_by(ADVERTISER_ID,ADVERTISER_NAME,INSERTION_ORDER_ID,INSERTION_ORDER_NAME,
+                   Inventory_data[,c(this.frame)]) %>%
+          summarise(IMPS=sum(IMPRESSIONS),CLICKS=sum(CLICKS),PC=sum(PCCONVERSIONS),PV=sum(PVCONVERSIONS),
+                    SPEND=sum(BUYER_SPEND),EAP=sum(EAP)/sum(IMPRESSIONS),ECP=sum(ECP)/sum(IMPRESSIONS),BUYER_BID=sum(BUYER_BID)*1000/sum(IMPRESSIONS),VIEWS=sum(APPNEXUS_VIEWS),OUTOFVIEWS=sum(APPNEXUS_OUTOFVIEWS))
+        data_frame_inventory[is.na(data_frame_inventory)]=0
+        #data_frame_system$`system_data[, c(this.frame)]`
+        colnames(data_frame_inventory)[5]=this.frame
+        #Metric Calculations
+        data_frame_inventory$CPC<-data_frame_inventory$SPEND/(data_frame_inventory$CLICKS)
+        data_frame_inventory$CTR<-(data_frame_inventory$CLICKS)/data_frame_inventory$IMPS
+        data_frame_inventory$CPM<-data_frame_inventory$SPEND*1000/data_frame_inventory$IMPS
+        data_frame_inventory$IVR<-data_frame_inventory$VIEWS/(data_frame_inventory$VIEWS+data_frame_inventory$OUTOFVIEWS)
+        #data_frame_inventory$Rec_bid<-data_frame_inventory$EAP*.75/0.45
+        
+        data_frame_inventory[data_frame_inventory=='Inf']=0
+        #data_frame_inventory$TOT_CONV<-(data_frame_inventory$PC+data_frame_inventory$PV)
+  
+  
+        data_frame_inventory$RESULT_TYPE="CTR"
+        
+        data_frame_inventory<-subset(data_frame_inventory,(data_frame_inventory$IMPS>10)&(data_frame_inventory$CLICKS>2))
+        data_frame_inventory<-data_frame_inventory[order(-data_frame_inventory$CTR,data_frame_inventory$CPC,-data_frame_inventory$CLICKS),]
+        adv_id = as.integer(unique(data_frame_inventory$ADVERTISER_ID))
+        ctr_frame<-paste("top_inventory_click",this.frame, sep = '_')
+        assign(ctr_frame, data_frame_inventory)
+        print("done for Clickers")
+        #writing file to the machine
+  
+        #if(adv_id == "\\N" | adv_id=="0") return(0)
+        adv_folder = paste0(getwd(),"/adv_data/",adv_id,"/ctr_output")
+        system(paste0("mkdir -p ",adv_folder))
+        #system(paste0("sudo chown -R rstudio:rstudio ",adv_folder))
+        #print(trimws(unique(adv_data[,16])[1]))
+  
+        adv_filename = paste0( getwd(),"/adv_data/",adv_id,"/ctr_output/",ctr_frame,".tsv")
+        #print(j)
+  
+        #adv_filename = paste0("./adv_data/",trimws(unique(dataDF[,16])[j]),"/",date,".tsv")
+        write.table(data_frame_inventory,file = adv_filename,append = F,quote = F,sep = "\t",row.names = F,col.names = F)
+  
+  
+      }
+  
+      
+      ######Inventory Combinations for Conversions##########
+      
+      data_frame_inventory<-Inventory_data %>%
+        group_by(ADVERTISER_ID,ADVERTISER_NAME,INSERTION_ORDER_ID,INSERTION_ORDER_NAME,
+                 SELLER_MEMBER_ID,SELLER_NAME,SITE_DOMAIN,TAG_ID,CREATIVE_SIZE) %>%
+        summarise(IMPS=sum(IMPRESSIONS),CLICKS=sum(CLICKS),PC=sum(PCCONVERSIONS),PV=sum(PVCONVERSIONS),
+                  SPEND=sum(BUYER_SPEND),EAP=sum(EAP)/sum(IMPRESSIONS),ECP=sum(ECP)/sum(IMPRESSIONS),BUYER_BID=sum(BUYER_BID)*1000/sum(IMPRESSIONS),VIEWS=sum(APPNEXUS_VIEWS),OUTOFVIEWS=sum(APPNEXUS_OUTOFVIEWS))
+      data_frame_inventory[is.na(data_frame_inventory)]=0
+      
+      data_frame_inventory$CPA<-data_frame_inventory$SPEND/(data_frame_inventory$PC+data_frame_inventory$PV)
+      data_frame_inventory$CVR<-(data_frame_inventory$PC+data_frame_inventory$PV)/data_frame_inventory$IMPS
+      data_frame_inventory$CPM<-data_frame_inventory$SPEND*1000/data_frame_inventory$IMPS
+      data_frame_inventory$IVR<-data_frame_inventory$VIEWS/(data_frame_inventory$VIEWS+data_frame_inventory$OUTOFVIEWS)
+      data_frame_inventory[data_frame_inventory=='Inf']=0
+      data_frame_inventory$TOT_CONV<-(data_frame_inventory$PC+data_frame_inventory$PV)
+      
+      ########Loading Network Bids#########
+      adv_folder = paste0(getwd(),"/Network_Data/","/Inventory_Bids/")
+
+      filelist<-list.files(adv_folder)
+      path=paste0(adv_folder,"/",filelist)
+      network_inventory_bids_load<-as.data.frame(rbindlist(lapply(path, fread)))
+      colnames(network_inventory_bids_load)<-c(
+        "SITE_DOMAIN", "IMPS"    ,
+       "CLICKS"    ,  "PC"        ,
+        "PV",          "SPEND"    ,
+        "EAP"    ,     "ECP"        ,
+       "BUYER_BID"  , "VIEWS"      ,
+        "OUTOFVIEWS"  ,"CPC"        ,
+      "CTR"      ,   "CPM"        ,
+         "IVR"     ,    "BID" )
+
+      
+      #############################
+      
+      data_frame_inventory$RESULT_TYPE="CPA"
+      data_frame_inventory<-subset(data_frame_inventory,(data_frame_inventory$IMPS>10)&(data_frame_inventory$TOT_CONV>2))
+      data_frame_inventory<-data_frame_inventory[order(-data_frame_inventory$PC,data_frame_inventory$CPA,-data_frame_inventory$CVR),]
+      
+      data_frame_inventory_1=merge(data_frame_inventory,network_inventory_bids_load[,c("SITE_DOMAIN","BID")], by.x = "SITE_DOMAIN",by.y = "SITE_DOMAIN")
+      
+      adv_id = as.integer(unique(data_frame_inventory_1$ADVERTISER_ID))
+      cpa_frame<-paste("top_inventory_combinations_conv")
+      assign(cpa_frame, data_frame_inventory_1)
+      
+      print("done for Converters")
+      #writing file to the machine
+      
+      #if(adv_id == "\\N" | adv_id=="0") return(0)
+      adv_folder = paste0(getwd(),"/adv_data/",adv_id,"/comb_cpa_output")
+      system(paste0("mkdir -p ",adv_folder))
+      #system(paste0("sudo chown -R rstudio:rstudio ",adv_folder))
+      #print(trimws(unique(adv_data[,16])[1]))
+      
+      adv_filename = paste0( getwd(),"/adv_data/",adv_id,"/comb_cpa_output/",cpa_frame,".tsv")
+      #print(j)
+      
+      #adv_filename = paste0("./adv_data/",trimws(unique(dataDF[,16])[j]),"/",date,".tsv")
+      write.table(data_frame_inventory,file = adv_filename,append = F,quote = F,sep = "\t",row.names = F,col.names = F)
+      
+      
+      ######Inventory Combinations for Clickers##########
+      
+      data_frame_inventory<-Inventory_data %>%
+        group_by(ADVERTISER_ID,ADVERTISER_NAME,INSERTION_ORDER_ID,INSERTION_ORDER_NAME,
+                 SELLER_MEMBER_ID,SELLER_NAME,SITE_DOMAIN,TAG_ID,CREATIVE_SIZE) %>%
+        summarise(IMPS=sum(IMPRESSIONS),CLICKS=sum(CLICKS),PC=sum(PCCONVERSIONS),PV=sum(PVCONVERSIONS),
+                  SPEND=sum(BUYER_SPEND),EAP=sum(EAP)/sum(IMPRESSIONS),ECP=sum(ECP)/sum(IMPRESSIONS),BUYER_BID=sum(BUYER_BID)*1000/sum(IMPRESSIONS),VIEWS=sum(APPNEXUS_VIEWS),OUTOFVIEWS=sum(APPNEXUS_OUTOFVIEWS))
+      data_frame_inventory[is.na(data_frame_inventory)]=0
+      data_frame_inventory$CPC<-data_frame_inventory$SPEND/(data_frame_inventory$CLICKS)
+      data_frame_inventory$CTR<-(data_frame_inventory$CLICKS)/data_frame_inventory$IMPS
+      data_frame_inventory$CPM<-data_frame_inventory$SPEND*1000/data_frame_inventory$IMPS
+      data_frame_inventory$IVR<-data_frame_inventory$VIEWS/(data_frame_inventory$VIEWS+data_frame_inventory$OUTOFVIEWS)
+      data_frame_inventory[data_frame_inventory=='Inf']=0
+      #data_frame_inventory$TOT_CONV<-(data_frame_inventory$PC+data_frame_inventory$PV)
+      
+      
+      data_frame_inventory$RESULT_TYPE="CTR"
+      
+      
+      #network wide data set
+      network_data<-rbind(as.data.frame(data_frame_inventory),network_data)
+      ######
+      
+      data_frame_inventory<-subset(data_frame_inventory,(data_frame_inventory$IMPS>10)&(data_frame_inventory$CLICKS>2))
+      data_frame_inventory<-data_frame_inventory[order(-data_frame_inventory$CTR,data_frame_inventory$CPC,-data_frame_inventory$CLICKS),]
+      
+      #data_frame_inventory_1<- merge(x = data_frame_inventory, y = network_inventory_bids_load[,c("SITE_DOMAIN","BID")], by.x = "SITE_DOMAIN",by.y = "SITE_DOMAIN", all.x = TRUE)
+      
+      data_frame_inventory_1=merge(data_frame_inventory,network_inventory_bids_load[,c("SITE_DOMAIN","BID")], by.x = "SITE_DOMAIN",by.y = "SITE_DOMAIN")
+      
+      adv_id = as.integer(unique(data_frame_inventory_1$ADVERTISER_ID))
+      ctr_frame<-paste("top_inventory_combinations_click")
+      assign(ctr_frame, data_frame_inventory_1)
+      print("done for Clickers")
+      #writing file to the machine
+      
+      #if(adv_id == "\\N" | adv_id=="0") return(0)
+      adv_folder = paste0(getwd(),"/adv_data/",adv_id,"/comb_ctr_output")
+      system(paste0("mkdir -p ",adv_folder))
+      #system(paste0("sudo chown -R rstudio:rstudio ",adv_folder))
+      #print(trimws(unique(adv_data[,16])[1]))
+      
+      adv_filename = paste0( getwd(),"/adv_data/",adv_id,"/comb_ctr_output/",ctr_frame,".tsv")
+      #print(j)
+      
+      #adv_filename = paste0("./adv_data/",trimws(unique(dataDF[,16])[j]),"/",date,".tsv")
+      write.table(data_frame_inventory,file = adv_filename,append = F,quote = F,sep = "\t",row.names = F,col.names = F)
+      
+      #network wide data set
+      
+    }
+#})
+
+  
+network_data<-as.data.frame(network_data)
+
+#Network wide settings
+network_inventory_bids<-network_data %>%
+  group_by(SITE_DOMAIN) %>%
+  summarise(IMPS=sum(IMPS),CLICKS=sum(CLICKS),PC=sum(PC),PV=sum(PV),
+            SPEND=sum(SPEND),EAP=mean(EAP),ECP=mean(ECP),
+            BUYER_BID=mean(BUYER_BID),VIEWS=sum(VIEWS),
+            OUTOFVIEWS=sum(OUTOFVIEWS))
+network_inventory_bids[is.na(network_inventory_bids)]=0
+network_inventory_bids$CPC<-network_inventory_bids$SPEND/(network_inventory_bids$CLICKS)
+network_inventory_bids$CTR<-(network_inventory_bids$CLICKS)/network_inventory_bids$IMPS
+network_inventory_bids$CPM<-network_inventory_bids$SPEND*1000/network_inventory_bids$IMPS
+network_inventory_bids$IVR<-network_inventory_bids$VIEWS/(network_inventory_bids$VIEWS+network_inventory_bids$OUTOFVIEWS)
+network_inventory_bids$BID<-network_inventory_bids$EAP*.75/.45
+
+#if(adv_id == "\\N" | adv_id=="0") return(0)
+adv_folder = paste0(getwd(),"/Network_Data/","/Inventory_Bids")
+system(paste0("mkdir -p ",adv_folder))
+#system(paste0("sudo chown -R rstudio:rstudio ",adv_folder))
+#print(trimws(unique(adv_data[,16])[1]))
+
+adv_filename = paste0(getwd(),"/Network_Data/","/Inventory_Bids/","domain",".tsv")
+#print(j)
+
+#adv_filename = paste0("./adv_data/",trimws(unique(dataDF[,16])[j]),"/",date,".tsv")
+write.table(network_inventory_bids,file = adv_filename,append = F,quote = F,sep = "\t",row.names = F,col.names = F)
+
+
+
+
+```
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
